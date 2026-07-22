@@ -44,8 +44,10 @@ class Api(Blueprint):
 
     def register(self, app, options=None, first_registration=False):
         """Register self to application."""
-        self.app = app
         app.errorhandler(APIError)(self.handle_error)
+        # NB: self.app stays None here so specs routes added below defer into the blueprint
+        # and are flushed by super().register(). Flask 2.x forbids re-registering a blueprint,
+        # so we must not trigger route()'s live re-registration during our own registration.
         if self.specs:
             self.route('/_specs', params=dict(authorize=anonimous, update_specs=anonimous))(
                 self.specs_view)
@@ -54,7 +56,9 @@ class Api(Blueprint):
             def specs_html(*args, **kwargs): # noqa
                 return Response(render_template('swagger.html'))
 
-        return super(Api, self).register(app, options or {}, first_registration)
+        result = super(Api, self).register(app, options or {})
+        self.app = app
+        return result
 
     def authorize(self, *args, **kwargs):
         """Make authorization process.
@@ -110,7 +114,7 @@ class Api(Blueprint):
                 api.add_url_rule(url_detail_, view_func=view_func, **options)
 
             if api.app is not None:
-                Blueprint.register(api, api.app, {}, False)
+                Blueprint.register(api, api.app, {})
 
             return res
 
