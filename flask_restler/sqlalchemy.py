@@ -3,7 +3,6 @@ from __future__ import absolute_import
 from types import FunctionType
 from sqlalchemy import func
 from sqlalchemy.orm.attributes import QueryableAttribute
-from flask._compat import string_types
 
 from .filters import Filter as VanilaFilter, Filters
 from .resource import ResourceOptions, Resource, APIError, logger
@@ -118,7 +117,7 @@ class ModelResource(Resource):
     def sort(self, collection, *sorting, **kwargs):
         sorting_ = []
         for prop, desc in sorting:
-            if isinstance(prop, string_types):
+            if isinstance(prop, str):
                 prop = getattr(self.meta.model, prop, None)
 
             if prop is None:
