@@ -49,10 +49,13 @@ class Api(Blueprint):
         # and are flushed by super().register(). Flask 2.x forbids re-registering a blueprint,
         # so we must not trigger route()'s live re-registration during our own registration.
         if self.specs:
-            self.route('/_specs', params=dict(authorize=anonimous, update_specs=anonimous))(
+            # url_detail=None: these are singleton doc views, not resources. Without it, route()
+            # also registers a `/<name>` detail rule (e.g. `/<specs_html>`) that greedily matches
+            # any single-segment GET under the blueprint and shadows real endpoints on Werkzeug 2.x.
+            self.route('/_specs', url_detail=None, params=dict(authorize=anonimous, update_specs=anonimous))(
                 self.specs_view)
 
-            @self.route('/', params=dict(authorize=anonimous, update_specs=anonimous))
+            @self.route('/', url_detail=None, params=dict(authorize=anonimous, update_specs=anonimous))
             def specs_html(*args, **kwargs): # noqa
                 return Response(render_template('swagger.html'))
 
