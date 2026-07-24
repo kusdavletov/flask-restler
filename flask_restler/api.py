@@ -100,6 +100,9 @@ class Api(Blueprint):
 
             api.resources.append(res)
 
+            # Rules recorded so far; the ones appended below are the new ones to flush.
+            deferred_offset = len(api.deferred_functions)
+
             url_ = res.meta.url = url or res.meta.url or ('/%s' % res.meta.name)
             view_func = res.as_view(res.meta.name, api)
             api.add_url_rule(url_, view_func=view_func, **options)
@@ -117,7 +120,12 @@ class Api(Blueprint):
                 api.add_url_rule(url_detail_, view_func=view_func, **options)
 
             if api.app is not None:
-                Blueprint.register(api, api.app, {})
+                # Blueprint is already registered on an app. Flask 2.x forbids re-registering a
+                # blueprint (and re-running every deferred function would duplicate all existing
+                # rules), so flush only the rules recorded just above onto the live app.
+                state = api.make_setup_state(api.app, {}, first_registration=False)
+                for deferred in api.deferred_functions[deferred_offset:]:
+                    deferred(state)
 
             return res
 

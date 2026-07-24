@@ -2,7 +2,7 @@
 
 from __future__ import absolute_import
 
-import collections
+import collections.abc
 import logging
 import math
 import re
@@ -62,7 +62,7 @@ class ResourceOptions(object):
             self.specs = dict(self.specs)
 
         if self.strict:  # noqa
-            if not isinstance(self.strict, collections.Iterable):
+            if not isinstance(self.strict, collections.abc.Iterable):
                 self.strict = INTERNAL_ARGS
             self.strict = set(self.strict) | INTERNAL_ARGS
 

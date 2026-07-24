@@ -180,3 +180,43 @@ def test_specs(api, client):
 
     response = client.get('/api/v1/_specs')
     assert response.json
+
+
+def test_post_registration_routes_flush_without_duplicates(app, api, client):
+    """Resources added after the blueprint is registered must flush only their own rules.
+
+    Flask 2.x forbids re-registering a blueprint; re-running every deferred function would
+    re-add all previously registered rules, so the URL map must stay free of duplicates.
+    """
+    from flask_restler import Resource
+
+    @api.route
+    class AlphaResource(Resource):
+        def get_many(self, **kwargs):
+            return ['a']
+
+    @api.route
+    class BetaResource(Resource):
+        def get_many(self, **kwargs):
+            return ['b']
+
+    rules = [rule.rule for rule in app.url_map.iter_rules()]
+    assert len(rules) == len(set(rules))
+
+    assert client.get('/api/v1/alpha').json == ['a']
+    assert client.get('/api/v1/beta').json == ['b']
+
+
+def test_specs_routes_do_not_shadow_resources(app, api, client):
+    """The `/` and `/_specs` doc views must not register a greedy `/<name>` detail rule that
+    shadows single-segment resource routes on Werkzeug 2.x.
+    """
+    from flask_restler import Resource
+
+    @api.route
+    class WidgetResource(Resource):
+        def get_many(self, **kwargs):
+            return ['widgets']
+
+    assert client.get('/api/v1/widget').json == ['widgets']
+    assert client.get('/api/v1/_specs').status_code == 200
