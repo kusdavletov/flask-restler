@@ -24,6 +24,17 @@ def test_resource(app, api, client):
 
     assert UserResouce.meta.name == 'user'
 
+    # Register all resources before the first request: Flask 2.x forbids adding url rules
+    # once the app has handled a request.
+    @api.route('/users', '/users/{user}', endpoint='api-users')
+    class UserGroupResouce(MongoResource):
+
+        methods = 'get',
+
+        class Meta:
+            collection = lambda: DB.user
+            aggregate = [{'$group': {'_id': '$login'}}]
+
     response = client.get('/api/v1/user')
     assert not response.json
 
@@ -76,15 +87,6 @@ def test_resource(app, api, client):
 
     response = client.get('/api/v1/_specs')
     assert response.json
-
-    @api.route('/users', '/users/{user}', endpoint='api-users')
-    class UserGroupResouce(MongoResource):
-
-        methods = 'get',
-
-        class Meta:
-            collection = lambda: DB.user
-            aggregate = [{'$group': {'_id': '$login'}}]
 
     response = client.get('/api/v1/users?sort=name')
     assert response.status_code == 200

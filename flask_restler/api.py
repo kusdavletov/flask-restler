@@ -1,11 +1,10 @@
 from __future__ import absolute_import
 
 from flask import Blueprint, jsonify, request, render_template, json, Response
-from flask._compat import string_types, PY2
 import os
-import urllib
 import warnings
 from inspect import isclass
+from urllib.parse import urlencode
 
 from . import APIError
 from .auth import current_user
@@ -14,11 +13,6 @@ from .resource import Resource
 from apispec import APISpec
 from apispec.ext.marshmallow import MarshmallowPlugin
 #  from apispec.ext.marshmallow.swagger import schema2jsonschema
-
-if PY2:
-    urlencode = urllib.urlencode
-else:
-    urlencode = urllib.parse.urlencode
 
 
 DEFAULT = object()
@@ -50,17 +44,24 @@ class Api(Blueprint):
 
     def register(self, app, options=None, first_registration=False):
         """Register self to application."""
-        self.app = app
         app.errorhandler(APIError)(self.handle_error)
+        # NB: self.app stays None here so specs routes added below defer into the blueprint
+        # and are flushed by super().register(). Flask 2.x forbids re-registering a blueprint,
+        # so we must not trigger route()'s live re-registration during our own registration.
         if self.specs:
-            self.route('/_specs', params=dict(authorize=anonimous, update_specs=anonimous))(
+            # url_detail=None: these are singleton doc views, not resources. Without it, route()
+            # also registers a `/<name>` detail rule (e.g. `/<specs_html>`) that greedily matches
+            # any single-segment GET under the blueprint and shadows real endpoints on Werkzeug 2.x.
+            self.route('/_specs', url_detail=None, params=dict(authorize=anonimous, update_specs=anonimous))(
                 self.specs_view)
 
-            @self.route('/', params=dict(authorize=anonimous, update_specs=anonimous))
+            @self.route('/', url_detail=None, params=dict(authorize=anonimous, update_specs=anonimous))
             def specs_html(*args, **kwargs): # noqa
                 return Response(render_template('swagger.html'))
 
-        return super(Api, self).register(app, options or {}, first_registration)
+        result = super(Api, self).register(app, options or {})
+        self.app = app
+        return result
 
     def authorize(self, *args, **kwargs):
         """Make authorization process.
@@ -99,6 +100,9 @@ class Api(Blueprint):
 
             api.resources.append(res)
 
+            # Rules recorded so far; the ones appended below are the new ones to flush.
+            deferred_offset = len(api.deferred_functions)
+
             url_ = res.meta.url = url or res.meta.url or ('/%s' % res.meta.name)
             view_func = res.as_view(res.meta.name, api)
             api.add_url_rule(url_, view_func=view_func, **options)
@@ -116,14 +120,19 @@ class Api(Blueprint):
                 api.add_url_rule(url_detail_, view_func=view_func, **options)
 
             if api.app is not None:
-                Blueprint.register(api, api.app, {}, False)
+                # Blueprint is already registered on an app. Flask 2.x forbids re-registering a
+                # blueprint (and re-running every deferred function would duplicate all existing
+                # rules), so flush only the rules recorded just above onto the live app.
+                state = api.make_setup_state(api.app, {}, first_registration=False)
+                for deferred in api.deferred_functions[deferred_offset:]:
+                    deferred(state)
 
             return res
 
         if resource is not None and isinstance(resource, type) and issubclass(resource, Resource):
             return wrapper(resource)
 
-        elif isinstance(resource, string_types):
+        elif isinstance(resource, str):
             url = resource
 
         return wrapper

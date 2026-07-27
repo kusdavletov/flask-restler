@@ -1,7 +1,6 @@
 """Support Peewee ORM."""
 from __future__ import absolute_import
 from peewee import SQL, Field
-from flask._compat import string_types
 
 from .resource import ResourceOptions, Resource, APIError, logger
 from .filters import Filter as VanilaFilter, Filters
@@ -125,7 +124,7 @@ class ModelResource(Resource):
         logger.debug('Sort collection: %r', sorting)
         sorting_ = []
         for field, desc in sorting:
-            if isinstance(field, string_types):
+            if isinstance(field, str):
                 field = self.meta.model._meta.fields.get(field) or SQL(field)
 
             if desc:

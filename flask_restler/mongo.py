@@ -3,7 +3,6 @@ from types import FunctionType
 
 import bson
 import marshmallow as ma
-from flask._compat import string_types
 
 from .filters import Filter as VanilaFilter, Filters
 from .resource import ResourceOptions, Resource, APIError, logger
@@ -174,7 +173,7 @@ class MongoChain(object):
 
     def sort(self, key, direction=1):
         """Save ordering properties."""
-        if isinstance(key, string_types):
+        if isinstance(key, str):
             self.sorting = [(key, direction)]
         else:
             self.sorting = key
