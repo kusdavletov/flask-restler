@@ -1,3 +1,10 @@
-Flask           >= 0.11.1
-apispec         >= 2.0.2
+# Matches the dependencies the released package declares, so a build no longer has to patch this
+# file. The Flask and Werkzeug upper bounds are deliberately absent: 3.x is supported.
+Flask           >= 2.0
+Werkzeug        >= 2.0
+apispec         >= 2.0.2, < 4
 cached-property >= 1.4.3
+marshmallow     >= 2.0, < 3
+pyyaml          >= 5.1
+# marshmallow 2 and apispec 3 import distutils, which 3.12 only has via the setuptools shim.
+setuptools      >= 68; python_version >= "3.12"
