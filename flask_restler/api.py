@@ -40,6 +40,7 @@ class Api(Blueprint):
 
         super(Api, self).__init__(name, import_name, url_prefix=url_prefix, **kwargs)
         self.app = None
+        self.registration_options = {}
         self.resources = []
 
     def register(self, app, options=None, first_registration=False):
@@ -59,8 +60,12 @@ class Api(Blueprint):
             def specs_html(*args, **kwargs): # noqa
                 return Response(render_template('swagger.html'))
 
-        result = super(Api, self).register(app, options or {})
+        options = options or {}
+        result = super(Api, self).register(app, options)
         self.app = app
+        # Kept so a route added after registration is built with the prefix and subdomain the
+        # blueprint was actually registered under, not just the ones it was constructed with.
+        self.registration_options = options
         return result
 
     def authorize(self, *args, **kwargs):
@@ -100,16 +105,23 @@ class Api(Blueprint):
 
             api.resources.append(res)
 
-            # Rules recorded so far; the ones appended below are the new ones to flush.
-            deferred_offset = len(api.deferred_functions)
+            # Before the blueprint is registered, rules defer into it as usual. Afterwards every
+            # blueprint setup method is closed off -- a warning on Flask 2.2, an AssertionError from
+            # Blueprint._check_setup_finished on Flask 3 -- so the rules go straight onto the live app
+            # through a setup state instead. That is what the deferred closures would have called
+            # anyway, so both paths apply the same prefix, subdomain and url defaults.
+            add_url_rule = api.add_url_rule
+            if api.app is not None:
+                state = api.make_setup_state(api.app, api.registration_options, False)
+                add_url_rule = state.add_url_rule
 
             url_ = res.meta.url = url or res.meta.url or ('/%s' % res.meta.name)
             view_func = res.as_view(res.meta.name, api)
-            api.add_url_rule(url_, view_func=view_func, **options)
+            add_url_rule(url_, view_func=view_func, **options)
 
             for _, (route_, endpoint_, options_) in res.meta.endpoints.values():
-                api.add_url_rule('%s/%s' % (url_, route_.strip('/')), view_func=view_func,
-                                 defaults={'endpoint': endpoint_}, **options_)
+                add_url_rule('%s/%s' % (url_, route_.strip('/')), view_func=view_func,
+                             defaults={'endpoint': endpoint_}, **options_)
 
             url_detail_ = url_detail
             if url_detail is DEFAULT:
@@ -117,15 +129,7 @@ class Api(Blueprint):
                     ('%s/<%s>' % (url_, res.meta.name))
 
             if url_detail:
-                api.add_url_rule(url_detail_, view_func=view_func, **options)
-
-            if api.app is not None:
-                # Blueprint is already registered on an app. Flask 2.x forbids re-registering a
-                # blueprint (and re-running every deferred function would duplicate all existing
-                # rules), so flush only the rules recorded just above onto the live app.
-                state = api.make_setup_state(api.app, {}, first_registration=False)
-                for deferred in api.deferred_functions[deferred_offset:]:
-                    deferred(state)
+                add_url_rule(url_detail_, view_func=view_func, **options)
 
             return res
 
