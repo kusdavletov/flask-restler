@@ -129,7 +129,7 @@ class MongoChain(object):
     CURSOR_METHODS = (
         'where', 'sort', 'skip', 'rewind', 'retrieved', 'remove_option', 'next', 'min',
         'max_time_ms', 'max_scan', 'max_await_time_ms', 'max', 'limit', 'hint', 'explain',
-        'distinct', 'cursor_id', 'count', 'comment', 'collection', 'close', 'clone', 'batch_size',
+        'distinct', 'cursor_id', 'comment', 'collection', 'close', 'clone', 'batch_size',
         'alive', 'address', 'add_option', '__getitem__'
     )
 
@@ -198,6 +198,14 @@ class MongoChain(object):
             return self.collection.find(query, self.projection).sort(self.sorting)
 
         return self.collection.find(query, self.projection)
+
+    def count(self):
+        """Count the documents this chain selects.
+
+        Not proxied to the cursor: pymongo 4 removed Cursor.count(). Collection.count_documents()
+        is its replacement and has existed since pymongo 3.7, which this package already requires.
+        """
+        return self.collection.count_documents(self.query and {'$and': self.query} or {})
 
     def __getattr__(self, name):
         """Proxy any attributes except find to self.collection."""
