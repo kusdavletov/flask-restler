@@ -43,7 +43,7 @@ class Api(Blueprint):
         self.registration_options = {}
         self.resources = []
 
-    def register(self, app, options=None, first_registration=False):
+    def register(self, app, options=None):
         """Register self to application."""
         app.errorhandler(APIError)(self.handle_error)
         # NB: self.app stays None here so specs routes added below defer into the blueprint
